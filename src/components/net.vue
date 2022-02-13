@@ -15,6 +15,7 @@
                         <p>档位: 买入价格对应的档位，这里初始档位为100，若设置其他的数值，会向上计算到100。</p>
                         <p>数据行: 当档位为100时可以设置向下计算的数据行数，当档位非100时不会向下计算，此项无意义隐藏</p>
                         <p>一档买入金额: 100档位买入的总资金，也是每次交易的资金，会根据子策略2变化</p>
+                        <p>股数为100倍数： 实际交易中，一般交易份额为100的倍数，默认开启</p>
                         <p>其他参数则基本和文章里的概念一致</p>
                     </div>
                     <div class="text_section">
@@ -45,7 +46,10 @@
             <el-form-item label="小网，单位%">
                 <el-input v-model.number="smallNet" type="number" />
             </el-form-item>
-            <el-form-item>
+            <el-form-item label="股数为100倍数">
+                <el-checkbox v-model="hundredMultiple" />
+            </el-form-item>
+            <el-form-item label=" ">
                 <el-button type="primary" @click="showTable">计算</el-button>
             </el-form-item>
         </el-form>
@@ -108,6 +112,10 @@ function fixed(num, n) {
     return Math.round(num * ratio) / ratio
 }
 
+function hundred(num) {
+    return Math.round(num / 100) * 100
+}
+
 export default {
     data() {
         return {
@@ -138,6 +146,7 @@ export default {
             keepStrategy: true,
             overchargeStrategy: true,
             netStrategy: true,
+            hundredMultiple: true,
         }
     },
     computed: {
@@ -195,12 +204,19 @@ export default {
             return list.map((item, i) => {
                 const buyPrice = fixed(ratio * item.buyPriceRatio, 3)
                 const sellPrice = fixed(ratio * item.sellPriceRatio, 3)
-                const buyCount = this.buyCount * (1 + this.overcharge * i / 100)
-                const buyNum = Math.ceil(buyCount / buyPrice)
+                let buyCount = this.buyCount * (1 + this.overcharge * i / 100)
+                let buyNum = Math.ceil(buyCount / buyPrice)
+                if (this.hundredMultiple) {
+                    buyNum = hundred(buyNum)
+                }
+                buyCount = fixed(buyNum * buyPrice, 2) // 金额由整数量再计算
                 const magnification = (item.gear + percentage) / item.gear
                 const profit = buyNum * buyPrice * (magnification - 1)
                 const keepCount = profit * this.multiple
-                const sellNum = Math.ceil(buyNum - keepCount / sellPrice)
+                let sellNum = Math.ceil(buyNum - keepCount / sellPrice)
+                if (this.hundredMultiple) {
+                    sellNum = hundred(sellNum)
+                }
                 const keepNum = buyNum - sellNum
                 return {
                     ...item,
@@ -208,12 +224,12 @@ export default {
                     buyPrice,
                     sellPrice,
                     buyNum,
-                    buyCount: fixed(buyNum * buyPrice, 2), // 金额由整数量再计算
+                    buyCount,
                     sellNum,
                     sellCount: fixed(sellNum * sellPrice, 2),
                     keepNum,
                     keepCount: fixed(keepNum * sellPrice, 2),
-                    profitPercentage: `${(magnification * 100 - 100).toFixed(2)}%`,
+                    profitPercentage: `${((sellPrice * buyNum - buyCount) * 100 / buyCount).toFixed(2)}%`,
                     profitCount: fixed(profit, 2),
                 }
             })
